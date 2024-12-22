@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub RSS Feed Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/plugin/relativeTime.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white dark:bg-gray-900 transition-colors duration-200">
+    <div class="container mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                Recent Commits to the-book-of-secret-knowledge:master
+            </h1>
+            <button id="darkModeToggle" class="p-2 rounded-lg bg-gray-200 dark:bg-gray-700">
+                <svg class="w-6 h-6 text-gray-800 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z">
+                    </path>
+                </svg>
+            </button>
+        </div>
+
+        <div class="space-y-6" id="feed-entries"></div>
+    </div>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        }
+        
+        dayjs.extend(window.dayjs_plugin_relativeTime);
+
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        const html = document.documentElement;
+
+        const darkMode = localStorage.getItem('darkMode') === 'true' || 
+            (localStorage.getItem('darkMode') === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+        if (darkMode) {
+            html.classList.add('dark');
+        }
+
+        darkModeToggle.addEventListener('click', () => {
+            html.classList.toggle('dark');
+            localStorage.setItem('darkMode', html.classList.contains('dark'));
+        });
+
+        async function fetchAndParseRSS() {
+            try {
+                const response = await fetch('/api/rss');
+                const text = await response.text();
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(text, 'text/xml');
+                
+                const entries = Array.from(xmlDoc.getElementsByTagName('entry')).map(entry => ({
+                    title: entry.getElementsByTagName('title')[0]?.textContent?.trim() || '',
+                    author: entry.getElementsByTagName('author')[0]?.getElementsByTagName('name')[0]?.textContent || '',
+                    updated: entry.getElementsByTagName('updated')[0]?.textContent || '',
+                    link: entry.getElementsByTagName('link')[0]?.getAttribute('href') || '',
+                    content: entry.getElementsByTagName('content')[0]?.textContent || ''
+                }));
+
+                renderEntries(entries);
+            } catch (error) {
+                console.error('Error fetching RSS:', error);
+                document.getElementById('feed-entries').innerHTML = `
+                    <div class="p-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-100 rounded-lg">
+                        Failed to load RSS feed. Please try again later.
+                    </div>`;
+            }
+        }
+
+        function renderEntries(entries) {
+            const container = document.getElementById('feed-entries');
+            container.innerHTML = '';
+            
+            entries.forEach(entry => {
+                const entryElement = document.createElement('div');
+                entryElement.className = 'p-6 bg-gray-50 dark:bg-gray-800 rounded-lg shadow';
+                
+                entryElement.innerHTML = `
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                            ${entry.title}
+                        </h2>
+                        <span class="text-sm text-gray-600 dark:text-gray-400">
+                            ${dayjs(entry.updated).fromNow()}
+                        </span>
+                    </div>
+                    <div class="space-y-2">
+                        <p class="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                            ${entry.content}
+                        </p>
+                        <div class="flex items-center justify-between mt-4">
+                            <span class="text-sm text-gray-600 dark:text-gray-400">
+                                By ${entry.author}
+                            </span>
+                            <a href="${entry.link}" 
+                               target="_blank"
+                               class="text-blue-600 dark:text-blue-400 hover:underline">
+                                View commit
+                            </a>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(entryElement);
+            });
+        }
+
+        fetchAndParseRSS();
+    </script>
+</body>
+</html>
